@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "maximous": {
-      "command": "maximous",
-      "args": ["--db", ".maximous/brain.db"]
-    }
-  }
-}

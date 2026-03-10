@@ -26,33 +26,45 @@ Each agent spawns its own MCP server process. All processes share a single SQLit
 
 ## Installation
 
-### Prerequisites
+### As a Claude Code plugin (recommended)
 
-- [Rust](https://rustup.rs/) (1.70+)
+Install directly from GitHub:
+
+```bash
+claude plugin add github:laurentlouk/maximous
+```
+
+This installs maximous as a plugin with all skills, hooks, and the MCP server. The binary needs to be available — either build from source or download a release.
+
+### Download pre-built binary
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/laurentlouk/maximous/main/scripts/install.sh | bash
+```
+
+This detects your OS and architecture, downloads the correct binary from GitHub Releases, and installs it to `~/.cargo/bin/`.
+
+Supported platforms: macOS (arm64, x86_64), Linux (arm64, x86_64).
 
 ### Build from source
 
 ```bash
-git clone https://github.com/your-username/maximous.git
+git clone https://github.com/laurentlouk/maximous.git
 cd maximous
 cargo build --release
 ```
 
 The binary is at `target/release/maximous` (about 3MB).
 
-### Install globally
+To install globally:
 
 ```bash
 cargo install --path .
 ```
 
-This puts `maximous` in your `$CARGO_HOME/bin` (usually `~/.cargo/bin`).
+### Manual MCP setup (without plugin)
 
-## Usage
-
-### As a Claude Code plugin
-
-Copy the `plugin/` directory into your Claude Code plugins folder, or add the MCP server directly to your project's `.mcp.json`:
+If you just want the MCP server without the full plugin, add to your project's `.mcp.json`:
 
 ```json
 {
@@ -65,7 +77,19 @@ Copy the `plugin/` directory into your Claude Code plugins folder, or add the MC
 }
 ```
 
-Claude Code will auto-spawn the server and make all 14 tools available to agents.
+## Usage
+
+Claude Code auto-spawns the MCP server and makes all 14 tools available to agents. The plugin also includes 7 skills that teach agents how to use maximous effectively:
+
+| Skill | Purpose |
+|---|---|
+| **orchestrate** | Set up full multi-agent workflows |
+| **coordinate** | Task lifecycle and dependency management |
+| **communicate** | Message channels and priority queues |
+| **memory** | Shared key-value storage with TTL |
+| **observe** | Watch for state changes via polling |
+| **status** | Quick overview of current state |
+| **cleanup** | Expire stale data and maintain the database |
 
 ### Standalone
 
@@ -118,6 +142,12 @@ Here's how agents coordinate through maximous:
 ```
 maximous/
 ├── Cargo.toml
+├── .claude-plugin/      # Plugin manifest
+│   └── plugin.json
+├── .mcp.json            # MCP server config
+├── skills/              # 7 agent skills
+├── hooks/               # SessionStart hook
+├── scripts/             # Launcher, installer, db init
 ├── src/
 │   ├── main.rs          # CLI entry, spawns MCP stdio loop
 │   ├── lib.rs           # Library root
@@ -133,7 +163,7 @@ maximous/
 │       └── changes.rs   # Observation/change log polling
 ├── tests/               # 35 tests
 ├── benches/             # Criterion benchmarks
-└── plugin/              # Claude Code plugin manifest
+└── .github/workflows/   # CI + release builds
 ```
 
 ### Database Schema
@@ -162,7 +192,7 @@ maximous/
 ### Setup
 
 ```bash
-git clone https://github.com/your-username/maximous.git
+git clone https://github.com/laurentlouk/maximous.git
 cd maximous
 cargo build
 ```
@@ -224,6 +254,17 @@ Benchmarks cover:
 - Validate required fields at the top of each function
 - Use `rusqlite::params![]` for parameterized queries (never string interpolation)
 - Tests use `Connection::open_in_memory()` with `db::init_db()` for isolation
+
+### Releasing
+
+Tag a version to trigger cross-platform builds and a GitHub Release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub Actions builds binaries for macOS (arm64, x86_64) and Linux (arm64, x86_64), then creates a release with the tarballs attached.
 
 ## Contributing
 

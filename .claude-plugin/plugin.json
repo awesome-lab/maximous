@@ -1,0 +1,14 @@
+{
+  "name": "maximous",
+  "version": "0.1.0",
+  "description": "Lightweight SQLite brain for multi-agent orchestration — shared memory, messaging, task coordination, and observation for Claude Code agents",
+  "author": {
+    "name": "Laurent",
+    "url": "https://github.com/laurentlouk/maximous"
+  },
+  "repository": "https://github.com/laurentlouk/maximous",
+  "license": "MIT",
+  "keywords": ["multi-agent", "orchestration", "sqlite", "mcp", "coordination"],
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}

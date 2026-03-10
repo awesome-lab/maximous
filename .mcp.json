@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "maximous": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/run-maximous.sh",
+      "args": []
+    }
+  }
+}
