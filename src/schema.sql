@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS memory (
     key TEXT NOT NULL,
     value TEXT NOT NULL,
     ttl_seconds INTEGER,
+    observation_type TEXT,
+    category TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (namespace, key)

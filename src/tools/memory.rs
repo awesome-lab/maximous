@@ -16,6 +16,8 @@ pub fn set(args: &Value, conn: &Connection) -> ToolResult {
         None => return ToolResult::fail("missing required field: value"),
     };
     let ttl = args["ttl_seconds"].as_i64();
+    let observation_type = args["observation_type"].as_str();
+    let category = args["category"].as_str();
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -23,10 +25,10 @@ pub fn set(args: &Value, conn: &Connection) -> ToolResult {
         .as_secs() as i64;
 
     match conn.execute(
-        "INSERT INTO memory (namespace, key, value, ttl_seconds, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5)
-         ON CONFLICT(namespace, key) DO UPDATE SET value=?3, ttl_seconds=?4, updated_at=?5",
-        rusqlite::params![namespace, key, value, ttl, now],
+        "INSERT INTO memory (namespace, key, value, ttl_seconds, observation_type, category, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+         ON CONFLICT(namespace, key) DO UPDATE SET value=?3, ttl_seconds=?4, observation_type=?5, category=?6, updated_at=?7",
+        rusqlite::params![namespace, key, value, ttl, observation_type, category, now],
     ) {
         Ok(_) => ToolResult::success(serde_json::json!({"stored": true})),
         Err(e) => ToolResult::fail(&format!("db error: {}", e)),
@@ -50,18 +52,20 @@ pub fn get(args: &Value, conn: &Connection) -> ToolResult {
 
     match args["key"].as_str() {
         Some(key) => {
-            let result: Result<(String, Option<i64>, i64), _> = conn.query_row(
-                "SELECT value, ttl_seconds, updated_at FROM memory WHERE namespace = ?1 AND key = ?2",
+            let result: Result<(String, Option<i64>, i64, Option<String>, Option<String>), _> = conn.query_row(
+                "SELECT value, ttl_seconds, updated_at, observation_type, category FROM memory WHERE namespace = ?1 AND key = ?2",
                 rusqlite::params![namespace, key],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
             );
             match result {
-                Ok((value, ttl, updated_at)) => ToolResult::success(serde_json::json!({
+                Ok((value, ttl, updated_at, observation_type, category)) => ToolResult::success(serde_json::json!({
                     "namespace": namespace,
                     "key": key,
                     "value": value,
                     "ttl_seconds": ttl,
                     "updated_at": updated_at,
+                    "observation_type": observation_type,
+                    "category": category,
                 })),
                 Err(_) => ToolResult::success(serde_json::json!({
                     "namespace": namespace,
@@ -95,54 +99,43 @@ pub fn search(args: &Value, conn: &Connection) -> ToolResult {
         None => return ToolResult::fail("missing required field: query"),
     };
     let namespace = args["namespace"].as_str();
+    let observation_type = args["observation_type"].as_str();
     let limit = args["limit"].as_i64().unwrap_or(50);
     let offset = args["offset"].as_i64().unwrap_or(0);
 
     // Try FTS5 first, fall back to LIKE if the FTS table doesn't exist
-    match search_fts(query, namespace, limit, offset, conn) {
+    match search_fts(query, namespace, observation_type, limit, offset, conn) {
         Ok(result) => result,
-        Err(_) => search_like(query, namespace, limit, offset, conn),
+        Err(_) => search_like(query, namespace, observation_type, limit, offset, conn),
     }
 }
 
 fn search_fts(
     query: &str,
     namespace: Option<&str>,
+    observation_type: Option<&str>,
     limit: i64,
     offset: i64,
     conn: &Connection,
 ) -> Result<ToolResult, rusqlite::Error> {
-    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match namespace {
-        Some(ns) => (
-            "SELECT m.namespace, m.key, m.value, f.rank \
+    let mut sql = "SELECT m.namespace, m.key, m.value, f.rank \
              FROM memory_fts f \
              JOIN memory m ON m.rowid = f.rowid \
-             WHERE memory_fts MATCH ? AND m.namespace = ? \
-             ORDER BY f.rank \
-             LIMIT ? OFFSET ?"
-                .to_string(),
-            vec![
-                Box::new(query.to_string()),
-                Box::new(ns.to_string()),
-                Box::new(limit),
-                Box::new(offset),
-            ],
-        ),
-        None => (
-            "SELECT m.namespace, m.key, m.value, f.rank \
-             FROM memory_fts f \
-             JOIN memory m ON m.rowid = f.rowid \
-             WHERE memory_fts MATCH ? \
-             ORDER BY f.rank \
-             LIMIT ? OFFSET ?"
-                .to_string(),
-            vec![
-                Box::new(query.to_string()),
-                Box::new(limit),
-                Box::new(offset),
-            ],
-        ),
-    };
+             WHERE memory_fts MATCH ?"
+        .to_string();
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(query.to_string())];
+
+    if let Some(ns) = namespace {
+        sql.push_str(" AND m.namespace = ?");
+        params.push(Box::new(ns.to_string()));
+    }
+    if let Some(ot) = observation_type {
+        sql.push_str(" AND m.observation_type = ?");
+        params.push(Box::new(ot.to_string()));
+    }
+    sql.push_str(" ORDER BY f.rank LIMIT ? OFFSET ?");
+    params.push(Box::new(limit));
+    params.push(Box::new(offset));
 
     let mut stmt = conn.prepare(&sql)?;
     let params_ref: Vec<&dyn rusqlite::types::ToSql> =
@@ -171,29 +164,25 @@ fn search_fts(
 fn search_like(
     query: &str,
     namespace: Option<&str>,
+    observation_type: Option<&str>,
     limit: i64,
     offset: i64,
     conn: &Connection,
 ) -> ToolResult {
-    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match namespace {
-        Some(ns) => (
-            "SELECT namespace, key, value FROM memory WHERE namespace = ? AND value LIKE ? LIMIT ? OFFSET ?".to_string(),
-            vec![
-                Box::new(ns.to_string()),
-                Box::new(format!("%{}%", query)),
-                Box::new(limit),
-                Box::new(offset),
-            ],
-        ),
-        None => (
-            "SELECT namespace, key, value FROM memory WHERE value LIKE ? LIMIT ? OFFSET ?".to_string(),
-            vec![
-                Box::new(format!("%{}%", query)),
-                Box::new(limit),
-                Box::new(offset),
-            ],
-        ),
-    };
+    let mut sql = "SELECT namespace, key, value FROM memory WHERE value LIKE ?".to_string();
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(format!("%{}%", query))];
+
+    if let Some(ns) = namespace {
+        sql.push_str(" AND namespace = ?");
+        params.push(Box::new(ns.to_string()));
+    }
+    if let Some(ot) = observation_type {
+        sql.push_str(" AND observation_type = ?");
+        params.push(Box::new(ot.to_string()));
+    }
+    sql.push_str(" LIMIT ? OFFSET ?");
+    params.push(Box::new(limit));
+    params.push(Box::new(offset));
 
     let mut stmt = conn.prepare(&sql).unwrap();
     let params_ref: Vec<&dyn rusqlite::types::ToSql> =
