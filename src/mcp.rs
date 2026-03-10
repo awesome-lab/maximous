@@ -110,6 +110,21 @@ pub fn tool_definitions() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
+            name: "memory_search_index".into(),
+            description: "Search memory returning compact index (snippet + token estimate). Use memory_get to fetch full values. 10x more token-efficient than memory_search.".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query (FTS5 syntax supported)"},
+                    "namespace": {"type": "string", "description": "Optional namespace filter"},
+                    "observation_type": {"type": "string", "description": "Filter by observation type"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 20},
+                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
+                },
+                "required": ["query"]
+            }),
+        },
+        ToolDef {
             name: "memory_delete".into(),
             description: "Delete a key from memory or expire all stale entries".into(),
             input_schema: serde_json::json!({
@@ -255,6 +270,42 @@ pub fn tool_definitions() -> Vec<ToolDef> {
                     "since_id": {"type": "integer", "description": "Return changes with ID greater than this", "default": 0},
                     "table_name": {"type": "string", "description": "Optional filter by table name"},
                     "limit": {"type": "integer", "description": "Max changes to return", "default": 100}
+                }
+            }),
+        },
+        ToolDef {
+            name: "session_start".into(),
+            description: "Start a new session for tracking agent work".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "agent_id": {"type": "string", "description": "Agent starting the session"},
+                    "metadata": {"type": "string", "description": "Optional JSON metadata about the session"}
+                }
+            }),
+        },
+        ToolDef {
+            name: "session_end".into(),
+            description: "End a session with optional summary".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Session ID to end"},
+                    "summary": {"type": "string", "description": "Summary of what was accomplished"}
+                },
+                "required": ["id"]
+            }),
+        },
+        ToolDef {
+            name: "session_list".into(),
+            description: "List sessions filtered by agent or status".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "agent_id": {"type": "string", "description": "Filter by agent"},
+                    "status": {"type": "string", "description": "Filter by status (active, ended)"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 50},
+                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
                 }
             }),
         },
