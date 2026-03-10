@@ -3,23 +3,28 @@ mod mcp;
 mod tools;
 mod web;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
 #[command(name = "maximous", about = "SQLite brain for multi-agent orchestration")]
 struct Cli {
     /// Path to the SQLite database file
-    #[arg(long, default_value = ".maximous/brain.db")]
+    #[arg(long, default_value = ".maximous/brain.db", global = true)]
     db: String,
 
-    /// Enable web dashboard
-    #[arg(long)]
-    web: bool,
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
 
-    /// Web dashboard port
-    #[arg(long, default_value = "8375")]
-    port: u16,
+#[derive(Subcommand)]
+enum Commands {
+    /// Start the web dashboard
+    Dashboard {
+        /// Web dashboard port
+        #[arg(long, default_value = "8375")]
+        port: u16,
+    },
 }
 
 fn main() {
@@ -29,10 +34,41 @@ fn main() {
 
     let conn = Arc::new(Mutex::new(conn));
 
-    if cli.web {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(web::serve(conn, cli.port));
-    } else {
-        mcp::run_stdio(conn);
+    match cli.command {
+        Some(Commands::Dashboard { port }) => {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let url = format!("http://127.0.0.1:{}", port);
+                // Spawn browser open in background so it doesn't block the server
+                let url_clone = url.clone();
+                tokio::spawn(async move {
+                    // Small delay to let the server start binding
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    let _ = open_browser(&url_clone);
+                });
+                web::serve(conn, port).await;
+            });
+        }
+        None => {
+            mcp::run_stdio(conn);
+        }
+    }
+}
+
+fn open_browser(url: &str) -> std::io::Result<std::process::Child> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(url).spawn()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open").arg(url).spawn()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "unsupported platform for browser open",
+        ))
     }
 }

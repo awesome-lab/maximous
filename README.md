@@ -65,14 +65,17 @@ Built-in web dashboard at `http://127.0.0.1:8375` with 7 views:
 
 Start the dashboard:
 ```bash
-# Start with default port 8375
-maximous --db .maximous/brain.db --web
+# Start dashboard (auto-opens browser)
+maximous dashboard
 
-# Or specify a custom port
-maximous --db .maximous/brain.db --web --port 9000
+# Custom port
+maximous dashboard --port 9000
+
+# Custom database path
+maximous --db /path/to/brain.db dashboard
 ```
 
-Then open `http://127.0.0.1:8375` in your browser. The dashboard reads from the same `brain.db` that agents write to, so you see live data. SSE (Server-Sent Events) pushes changes to the browser automatically -- no manual refresh needed.
+The dashboard automatically opens `http://127.0.0.1:8375` in your browser. It reads from the same `brain.db` that agents write to, so you see live data. SSE (Server-Sent Events) pushes changes to the browser automatically -- no manual refresh needed.
 
 **Note:** The web dashboard runs instead of the MCP server (not alongside it). Your agents use the MCP stdio server as usual; the dashboard is a separate process for human observation.
 
@@ -172,11 +175,11 @@ Maximous tools are available in every session but Claude only uses them when the
 # Start the MCP server (reads JSON-RPC from stdin, writes to stdout)
 maximous --db .maximous/brain.db
 
-# Start with web dashboard
-maximous --db .maximous/brain.db --web --port 8375
+# Start web dashboard (auto-opens browser)
+maximous dashboard
 
-# Custom database path
-maximous --db /tmp/my-project.db
+# Dashboard with custom port and database
+maximous --db /tmp/my-project.db dashboard --port 9000
 ```
 
 ### Quick smoke test
@@ -187,7 +190,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 Should return:
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"maximous","version":"0.2.0"}}}
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"tools":{}},"protocolVersion":"2024-11-05","serverInfo":{"name":"maximous","version":"0.3.0"}}}
 ```
 
 ## Multi-Agent Example
@@ -236,7 +239,7 @@ maximous/
 │   ├── app.js
 │   └── style.css
 ├── src/
-│   ├── main.rs          # CLI entry: MCP stdio or web dashboard
+│   ├── main.rs          # CLI entry: subcommands (default=MCP, dashboard=web)
 │   ├── lib.rs           # Library root
 │   ├── db.rs            # SQLite init, WAL mode, migrations
 │   ├── schema.sql       # 7 tables, 9 indexes, 19 triggers, FTS5
@@ -364,8 +367,8 @@ Benchmarks cover:
 Tag a version to trigger cross-platform builds and a GitHub Release:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 GitHub Actions builds binaries for macOS (arm64, x86_64) and Linux (arm64, x86_64), then creates a release with the tarballs attached.
