@@ -9,20 +9,6 @@
   "repository": "https://github.com/awesome-lab/maximous",
   "license": "MIT",
   "keywords": ["multi-agent", "orchestration", "sqlite", "mcp", "coordination"],
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/ensure-db.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  },
   "mcpServers": {
     "maximous": {
       "command": "maximous",

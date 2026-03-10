@@ -47,11 +47,27 @@ Returns `{"keys": [{"key": "parse-api", "updated_at": 1710000000}, ...]}`.
 
 ## Searching
 
-Search across all values (or within a namespace):
+Full-text search across all values (or within a namespace):
 ```
 memory_search(query="endpoints", namespace="task-results")
 ```
-Uses SQL LIKE matching — finds any value containing the query string.
+Uses FTS5 full-text search — supports word matching, prefix queries (`end*`), and phrase matching (`"api endpoints"`).
+
+### Progressive Disclosure with `memory_search_index`
+
+For large result sets, use `memory_search_index` to get a summary first:
+```
+memory_search_index(namespace="task-results")
+```
+Returns keys with metadata (timestamps, sizes) without full values — useful for deciding what to fetch.
+
+## Typed Observations
+
+Enrich memory entries with structured metadata:
+
+- `observation_type` — categorize entries (e.g. `"result"`, `"error"`, `"insight"`)
+- `category` — group related entries (e.g. `"api"`, `"auth"`, `"perf"`)
+- Wrap sensitive data in `<private>` tags — these entries are excluded from broad searches and only returned on exact key lookups
 
 ## TTL and Expiry
 
