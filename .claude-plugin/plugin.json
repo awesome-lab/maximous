@@ -1,6 +1,6 @@
 {
   "name": "maximous",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight SQLite brain for multi-agent orchestration — shared memory, messaging, task coordination, and observation for Claude Code agents",
   "author": {
     "name": "Laurent",

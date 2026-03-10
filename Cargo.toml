@@ -1,6 +1,6 @@
 [package]
 name = "maximous"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Lightweight SQLite brain for multi-agent orchestration"
 license = "MIT"
