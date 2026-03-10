@@ -2,6 +2,25 @@ use rusqlite::Connection;
 use serde_json::Value;
 use super::ToolResult;
 
+/// Strip <private>...</private> tags and replace with [REDACTED]
+fn strip_private(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut remaining = value;
+    while let Some(start) = remaining.find("<private>") {
+        result.push_str(&remaining[..start]);
+        result.push_str("[REDACTED]");
+        remaining = &remaining[start + 9..]; // skip "<private>"
+        if let Some(end) = remaining.find("</private>") {
+            remaining = &remaining[end + 10..]; // skip "</private>"
+        } else {
+            // No closing tag — redact rest
+            return result;
+        }
+    }
+    result.push_str(remaining);
+    result
+}
+
 pub fn set(args: &Value, conn: &Connection) -> ToolResult {
     let namespace = match args["namespace"].as_str() {
         Some(s) => s,
@@ -61,7 +80,7 @@ pub fn get(args: &Value, conn: &Connection) -> ToolResult {
                 Ok((value, ttl, updated_at, observation_type, category)) => ToolResult::success(serde_json::json!({
                     "namespace": namespace,
                     "key": key,
-                    "value": value,
+                    "value": strip_private(&value),
                     "ttl_seconds": ttl,
                     "updated_at": updated_at,
                     "observation_type": observation_type,
@@ -142,10 +161,11 @@ fn search_fts(
         params.iter().map(|p| p.as_ref()).collect();
     let matches: Vec<Value> = stmt
         .query_map(params_ref.as_slice(), |row| {
+            let value: String = row.get(2)?;
             Ok(serde_json::json!({
                 "namespace": row.get::<_, String>(0)?,
                 "key": row.get::<_, String>(1)?,
-                "value": row.get::<_, String>(2)?,
+                "value": strip_private(&value),
                 "rank": row.get::<_, f64>(3)?,
             }))
         })?
@@ -189,10 +209,11 @@ fn search_like(
         params.iter().map(|p| p.as_ref()).collect();
     let matches: Vec<Value> = stmt
         .query_map(params_ref.as_slice(), |row| {
+            let value: String = row.get(2)?;
             Ok(serde_json::json!({
                 "namespace": row.get::<_, String>(0)?,
                 "key": row.get::<_, String>(1)?,
-                "value": row.get::<_, String>(2)?,
+                "value": strip_private(&value),
             }))
         })
         .unwrap()
@@ -272,7 +293,7 @@ fn search_index_fts(
             Ok(serde_json::json!({
                 "namespace": ns,
                 "key": key,
-                "snippet": display_snippet,
+                "snippet": strip_private(&display_snippet),
                 "estimated_tokens": vlen / 4,
                 "observation_type": obs_type,
                 "category": cat,
@@ -334,7 +355,7 @@ fn search_index_like(
             Ok(serde_json::json!({
                 "namespace": ns,
                 "key": key,
-                "snippet": display_snippet,
+                "snippet": strip_private(&display_snippet),
                 "estimated_tokens": vlen / 4,
                 "observation_type": obs_type,
                 "category": cat,
