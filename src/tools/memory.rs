@@ -95,20 +95,109 @@ pub fn search(args: &Value, conn: &Connection) -> ToolResult {
         None => return ToolResult::fail("missing required field: query"),
     };
     let namespace = args["namespace"].as_str();
+    let limit = args["limit"].as_i64().unwrap_or(50);
+    let offset = args["offset"].as_i64().unwrap_or(0);
 
-    let (sql, params): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = match namespace {
+    // Try FTS5 first, fall back to LIKE if the FTS table doesn't exist
+    match search_fts(query, namespace, limit, offset, conn) {
+        Ok(result) => result,
+        Err(_) => search_like(query, namespace, limit, offset, conn),
+    }
+}
+
+fn search_fts(
+    query: &str,
+    namespace: Option<&str>,
+    limit: i64,
+    offset: i64,
+    conn: &Connection,
+) -> Result<ToolResult, rusqlite::Error> {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match namespace {
         Some(ns) => (
-            "SELECT namespace, key, value FROM memory WHERE namespace = ? AND value LIKE ?",
-            vec![Box::new(ns.to_string()), Box::new(format!("%{}%", query))],
+            "SELECT m.namespace, m.key, m.value, f.rank \
+             FROM memory_fts f \
+             JOIN memory m ON m.rowid = f.rowid \
+             WHERE memory_fts MATCH ? AND m.namespace = ? \
+             ORDER BY f.rank \
+             LIMIT ? OFFSET ?"
+                .to_string(),
+            vec![
+                Box::new(query.to_string()),
+                Box::new(ns.to_string()),
+                Box::new(limit),
+                Box::new(offset),
+            ],
         ),
         None => (
-            "SELECT namespace, key, value FROM memory WHERE value LIKE ?",
-            vec![Box::new(format!("%{}%", query))],
+            "SELECT m.namespace, m.key, m.value, f.rank \
+             FROM memory_fts f \
+             JOIN memory m ON m.rowid = f.rowid \
+             WHERE memory_fts MATCH ? \
+             ORDER BY f.rank \
+             LIMIT ? OFFSET ?"
+                .to_string(),
+            vec![
+                Box::new(query.to_string()),
+                Box::new(limit),
+                Box::new(offset),
+            ],
         ),
     };
 
-    let mut stmt = conn.prepare(sql).unwrap();
-    let params_ref: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let mut stmt = conn.prepare(&sql)?;
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+        params.iter().map(|p| p.as_ref()).collect();
+    let matches: Vec<Value> = stmt
+        .query_map(params_ref.as_slice(), |row| {
+            Ok(serde_json::json!({
+                "namespace": row.get::<_, String>(0)?,
+                "key": row.get::<_, String>(1)?,
+                "value": row.get::<_, String>(2)?,
+                "rank": row.get::<_, f64>(3)?,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let count = matches.len() as i64;
+    Ok(ToolResult::success(serde_json::json!({
+        "matches": matches,
+        "count": count,
+        "offset": offset,
+        "limit": limit,
+    })))
+}
+
+fn search_like(
+    query: &str,
+    namespace: Option<&str>,
+    limit: i64,
+    offset: i64,
+    conn: &Connection,
+) -> ToolResult {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match namespace {
+        Some(ns) => (
+            "SELECT namespace, key, value FROM memory WHERE namespace = ? AND value LIKE ? LIMIT ? OFFSET ?".to_string(),
+            vec![
+                Box::new(ns.to_string()),
+                Box::new(format!("%{}%", query)),
+                Box::new(limit),
+                Box::new(offset),
+            ],
+        ),
+        None => (
+            "SELECT namespace, key, value FROM memory WHERE value LIKE ? LIMIT ? OFFSET ?".to_string(),
+            vec![
+                Box::new(format!("%{}%", query)),
+                Box::new(limit),
+                Box::new(offset),
+            ],
+        ),
+    };
+
+    let mut stmt = conn.prepare(&sql).unwrap();
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+        params.iter().map(|p| p.as_ref()).collect();
     let matches: Vec<Value> = stmt
         .query_map(params_ref.as_slice(), |row| {
             Ok(serde_json::json!({
@@ -121,7 +210,13 @@ pub fn search(args: &Value, conn: &Connection) -> ToolResult {
         .filter_map(|r| r.ok())
         .collect();
 
-    ToolResult::success(serde_json::json!({"matches": matches, "count": matches.len()}))
+    let count = matches.len() as i64;
+    ToolResult::success(serde_json::json!({
+        "matches": matches,
+        "count": count,
+        "offset": offset,
+        "limit": limit,
+    }))
 }
 
 pub fn delete(args: &Value, conn: &Connection) -> ToolResult {

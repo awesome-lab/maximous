@@ -94,12 +94,14 @@ pub fn tool_definitions() -> Vec<ToolDef> {
         },
         ToolDef {
             name: "memory_search".into(),
-            description: "Full-text search across memory values".into(),
+            description: "Full-text search across memory values using FTS5 ranking".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query (matches against values)"},
-                    "namespace": {"type": "string", "description": "Optional namespace filter"}
+                    "query": {"type": "string", "description": "Search query with FTS5 syntax support (e.g. 'rust AND async', 'programming OR language')"},
+                    "namespace": {"type": "string", "description": "Optional namespace filter"},
+                    "limit": {"type": "integer", "description": "Max results to return", "default": 50},
+                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
                 },
                 "required": ["query"]
             }),

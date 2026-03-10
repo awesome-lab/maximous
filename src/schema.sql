@@ -165,3 +165,32 @@ BEGIN
             json_object('name', OLD.name),
             strftime('%s', 'now'));
 END;
+
+-- FTS5 full-text search for memory values
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
+    namespace,
+    key,
+    value,
+    content='memory',
+    content_rowid='rowid'
+);
+
+CREATE TRIGGER IF NOT EXISTS trg_memory_fts_insert AFTER INSERT ON memory
+BEGIN
+    INSERT INTO memory_fts(rowid, namespace, key, value)
+    VALUES (NEW.rowid, NEW.namespace, NEW.key, NEW.value);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_memory_fts_update AFTER UPDATE ON memory
+BEGIN
+    INSERT INTO memory_fts(memory_fts, rowid, namespace, key, value)
+    VALUES ('delete', OLD.rowid, OLD.namespace, OLD.key, OLD.value);
+    INSERT INTO memory_fts(rowid, namespace, key, value)
+    VALUES (NEW.rowid, NEW.namespace, NEW.key, NEW.value);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_memory_fts_delete AFTER DELETE ON memory
+BEGIN
+    INSERT INTO memory_fts(memory_fts, rowid, namespace, key, value)
+    VALUES ('delete', OLD.rowid, OLD.namespace, OLD.key, OLD.value);
+END;
