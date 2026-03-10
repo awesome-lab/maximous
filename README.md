@@ -80,7 +80,7 @@ All list endpoints support `limit` and `offset` parameters for efficient paginat
 First, add the marketplace:
 
 ```
-/plugin marketplace add https://github.com/laurentlouk/claude-plugins
+/plugin marketplace add https://github.com/awesome-lab/claude-plugins
 ```
 
 Then install the plugin from the marketplace:
@@ -96,7 +96,7 @@ This installs maximous as a plugin with all skills, hooks, and the MCP server. T
 ### Download pre-built binary
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/laurentlouk/maximous/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/awesome-lab/maximous/main/scripts/install.sh | bash
 ```
 
 This detects your OS and architecture, downloads the correct binary from GitHub Releases, and installs it to `~/.cargo/bin/`.
@@ -106,7 +106,7 @@ Supported platforms: macOS (arm64, x86_64), Linux (arm64, x86_64).
 ### Build from source
 
 ```bash
-git clone https://github.com/laurentlouk/maximous.git
+git clone https://github.com/awesome-lab/maximous.git
 cd maximous
 cargo build --release
 ```
@@ -282,7 +282,7 @@ maximous/
 ### Setup
 
 ```bash
-git clone https://github.com/laurentlouk/maximous.git
+git clone https://github.com/awesome-lab/maximous.git
 cd maximous
 cargo build
 ```

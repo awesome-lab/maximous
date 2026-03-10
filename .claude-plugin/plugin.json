@@ -4,9 +4,9 @@
   "description": "SQLite brain for multi-agent orchestration — FTS5 search, typed observations, progressive disclosure, privacy tags, session tracking, web dashboard, and real-time SSE updates",
   "author": {
     "name": "Laurent",
-    "url": "https://github.com/laurentlouk/maximous"
+    "url": "https://github.com/awesome-lab/maximous"
   },
-  "repository": "https://github.com/laurentlouk/maximous",
+  "repository": "https://github.com/awesome-lab/maximous",
   "license": "MIT",
   "keywords": ["multi-agent", "orchestration", "sqlite", "mcp", "coordination"],
   "hooks": {

@@ -12,7 +12,7 @@ if command -v maximous &>/dev/null || [ -x "${CLAUDE_PLUGIN_ROOT:-}/bin/maximous
 fi
 
 # Auto-install: download pre-built binary from GitHub Releases
-REPO="laurentlouk/maximous"
+REPO="awesome-lab/maximous"
 INSTALL_DIR="${HOME}/.cargo/bin"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"

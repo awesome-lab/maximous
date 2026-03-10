@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install maximous binary.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/laurentlouk/maximous/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/awesome-lab/maximous/main/scripts/install.sh | bash
 #   or: bash scripts/install.sh
 set -euo pipefail
 
@@ -24,7 +24,7 @@ case "$OS" in
   *)      echo "Unsupported OS: $OS" >&2; exit 1 ;;
 esac
 
-REPO="laurentlouk/maximous"
+REPO="awesome-lab/maximous"
 TARGET="${OS}-${ARCH}"
 
 echo "Installing maximous for ${TARGET}..."
