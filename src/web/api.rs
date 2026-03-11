@@ -237,7 +237,7 @@ pub async fn tickets(State(db): State<DbState>, Query(params): Query<TicketsPara
             "title": row.get::<_, String>(3)?,
             "status": row.get::<_, Option<String>>(4)?,
             "assignee": row.get::<_, Option<String>>(5)?,
-            "priority": row.get::<_, Option<String>>(6)?,
+            "priority": row.get::<_, Option<i64>>(6)?,
             "url": row.get::<_, Option<String>>(7)?,
             "labels": row.get::<_, Option<String>>(8)?,
             "fetched_at": row.get::<_, i64>(9)?,
@@ -265,8 +265,8 @@ pub async fn launches(State(db): State<DbState>, Query(params): Query<LaunchesPa
     };
 
     let sql = format!(
-        "SELECT l.id, l.ticket_id, l.team_id, l.status, l.created_at, l.updated_at,
-                t.title AS ticket_title, tm.name AS team_name
+        "SELECT l.id, l.ticket_id, l.team_id, l.branch, l.worktree_path, l.status, l.pr_url, l.error,
+                l.created_at, l.updated_at, t.title AS ticket_title, tm.name AS team_name
          FROM launches l
          LEFT JOIN tickets t ON l.ticket_id = t.id
          LEFT JOIN teams tm ON l.team_id = tm.id
@@ -283,11 +283,15 @@ pub async fn launches(State(db): State<DbState>, Query(params): Query<LaunchesPa
             "id": row.get::<_, String>(0)?,
             "ticket_id": row.get::<_, Option<String>>(1)?,
             "team_id": row.get::<_, Option<String>>(2)?,
-            "status": row.get::<_, String>(3)?,
-            "created_at": row.get::<_, i64>(4)?,
-            "updated_at": row.get::<_, i64>(5)?,
-            "ticket_title": row.get::<_, Option<String>>(6)?,
-            "team_name": row.get::<_, Option<String>>(7)?,
+            "branch": row.get::<_, Option<String>>(3)?,
+            "worktree_path": row.get::<_, Option<String>>(4)?,
+            "status": row.get::<_, String>(5)?,
+            "pr_url": row.get::<_, Option<String>>(6)?,
+            "error": row.get::<_, Option<String>>(7)?,
+            "created_at": row.get::<_, i64>(8)?,
+            "updated_at": row.get::<_, i64>(9)?,
+            "ticket_title": row.get::<_, Option<String>>(10)?,
+            "team_name": row.get::<_, Option<String>>(11)?,
         }))
     }).unwrap().filter_map(|r| r.ok()).collect();
 
@@ -533,5 +537,63 @@ pub async fn remove_team_member(
     });
     let conn = db.lock().unwrap();
     let result = crate::tools::teams::remove_member(&args, &conn);
+    Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
+}
+
+pub async fn delete_team(
+    State(db): State<DbState>,
+    Path(name): Path<String>,
+) -> Json<Value> {
+    let args = json!({ "name": name });
+    let conn = db.lock().unwrap();
+    let result = crate::tools::teams::delete(&args, &conn);
+    Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
+}
+
+#[derive(Deserialize)]
+pub struct CreateLaunchBody {
+    pub ticket_id: String,
+    pub team_id: String,
+    pub branch: Option<String>,
+    pub worktree_path: Option<String>,
+}
+
+pub async fn create_launch(
+    State(db): State<DbState>,
+    Json(body): Json<CreateLaunchBody>,
+) -> Json<Value> {
+    let branch = body.branch.unwrap_or_else(|| {
+        format!("launch/{}-{}", body.ticket_id.to_lowercase(), &uuid::Uuid::new_v4().to_string()[..8])
+    });
+    let args = json!({
+        "ticket_id": body.ticket_id,
+        "team_id": body.team_id,
+        "branch": branch,
+        "worktree_path": body.worktree_path.unwrap_or_default(),
+    });
+    let conn = db.lock().unwrap();
+    let result = crate::tools::launches::create(&args, &conn);
+    Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
+}
+
+pub async fn update_launch(
+    State(db): State<DbState>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let mut args = body;
+    args["id"] = json!(id);
+    let conn = db.lock().unwrap();
+    let result = crate::tools::launches::update(&args, &conn);
+    Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
+}
+
+pub async fn delete_launch(
+    State(db): State<DbState>,
+    Path(id): Path<String>,
+) -> Json<Value> {
+    let args = json!({ "id": id });
+    let conn = db.lock().unwrap();
+    let result = crate::tools::launches::delete(&args, &conn);
     Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
 }

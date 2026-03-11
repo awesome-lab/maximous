@@ -165,7 +165,7 @@ async function loadTeams() {
     var defs = results[0];
     var teamsData = results[1];
 
-    var defRows = (defs.agent_definitions || []).map(function(d) {
+    var defRows = (defs.agents || defs.agent_definitions || []).map(function(d) {
         var caps = '';
         try { caps = JSON.parse(d.capabilities || '[]').join(', '); } catch(e) { caps = escapeHtml(d.capabilities || '-'); }
         var prompt = d.prompt_hint || '';
@@ -181,18 +181,41 @@ async function loadTeams() {
         '</tr>';
     }).join('');
 
+    var allAgents = defs.agents || defs.agent_definitions || [];
     var teamCards = (teamsData.teams || []).map(function(t) {
+        var memberIds = (t.members || []).map(function(m) { return m.agent_id; });
         var members = (t.members || []).map(function(m) {
             var roleKey = (m.role || '').toLowerCase();
             return '<div class="team-member">' +
                 '<span class="member-name">' + escapeHtml(m.name || m.agent_id || '-') + '</span>' +
                 badge(escapeHtml(m.role || 'member'), roleKey) +
                 (m.model ? ' <span class="text-muted">' + escapeHtml(m.model) + '</span>' : '') +
+                '<button class="btn-remove-member" data-team="' + escapeHtml(t.name) + '" data-agent="' + escapeHtml(m.agent_id) + '" title="Remove">&times;</button>' +
             '</div>';
         }).join('');
+        var availableAgents = allAgents.filter(function(a) { return memberIds.indexOf(a.id) === -1; });
+        var addMemberHtml = '';
+        if (availableAgents.length > 0) {
+            var opts = availableAgents.map(function(a) {
+                return '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name || a.id) + '</option>';
+            }).join('');
+            addMemberHtml = '<div class="team-card-actions">' +
+                '<div class="add-member-row">' +
+                    '<select class="agent-select" data-team="' + escapeHtml(t.name) + '">' +
+                        '<option value="">Add agent...</option>' + opts +
+                    '</select>' +
+                    '<button class="btn-add-member" data-team="' + escapeHtml(t.name) + '">Add</button>' +
+                '</div>' +
+            '</div>';
+        }
         return '<div class="card team-card">' +
-            '<h3>' + escapeHtml(t.name || t.id) + '</h3>' +
+            '<div class="team-card-header">' +
+                '<h3>' + escapeHtml(t.name || t.id) + '</h3>' +
+                '<button class="btn-delete-team" data-team="' + escapeHtml(t.name) + '" title="Delete team">&times;</button>' +
+            '</div>' +
+            (t.description ? '<p class="text-muted" style="font-size:0.8rem;margin:0 0 0.5rem">' + escapeHtml(t.description) + '</p>' : '') +
             '<div class="team-members">' + (members || '<span class="text-muted">No members</span>') + '</div>' +
+            addMemberHtml +
         '</div>';
     }).join('');
 
@@ -206,7 +229,7 @@ async function loadTeams() {
         '</div>' +
         '<div class="section-header"><h3>Teams</h3><button class="btn-create" id="btn-new-team">+ New Team</button></div>' +
         '<div id="team-form-container" class="form-container hidden"></div>' +
-        '<div class="cards">' + (teamCards || '<div class="empty">No teams</div>') + '</div>');
+        '<div class="teams-grid">' + (teamCards || '<div class="empty">No teams</div>') + '</div>');
 
     // New Agent form toggle
     document.getElementById('btn-new-agent').addEventListener('click', function() {
@@ -306,34 +329,128 @@ async function loadTeams() {
             }
         });
     });
+
+    // Add member to team
+    el.querySelectorAll('.btn-add-member').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+            var teamName = this.dataset.team;
+            var select = el.querySelector('.agent-select[data-team="' + teamName + '"]');
+            var agentId = select.value;
+            if (!agentId) return;
+            var resp = await fetch(API + '/api/teams/' + encodeURIComponent(teamName) + '/members', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent_id: agentId }),
+            });
+            var result = await resp.json();
+            if (result.ok) {
+                loadTeams();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        });
+    });
+
+    // Remove member from team
+    el.querySelectorAll('.btn-remove-member').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+            var teamName = this.dataset.team;
+            var agentId = this.dataset.agent;
+            var resp = await fetch(API + '/api/teams/' + encodeURIComponent(teamName) + '/members/' + encodeURIComponent(agentId), {
+                method: 'DELETE',
+            });
+            var result = await resp.json();
+            if (result.ok) {
+                loadTeams();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        });
+    });
+
+    // Delete team
+    el.querySelectorAll('.btn-delete-team').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+            var teamName = this.dataset.team;
+            if (!confirm('Delete team "' + teamName + '"?')) return;
+            var resp = await fetch(API + '/api/teams/' + encodeURIComponent(teamName), {
+                method: 'DELETE',
+            });
+            var result = await resp.json();
+            if (result.ok) {
+                loadTeams();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        });
+    });
 }
 
 async function loadTickets() {
     var el = document.getElementById('page-tickets');
+    var teamsData = await fetchJSON('/api/teams');
+    var teams = teamsData.teams || [];
 
     async function renderTickets(url) {
         var data = await fetchJSON(url);
+        var teamOpts = teams.map(function(t) {
+            return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.name) + '</option>';
+        }).join('');
         var rows = (data.tickets || []).map(function(t) {
             var titleCell = t.url
                 ? '<a href="' + escapeHtml(t.url) + '" target="_blank" rel="noopener">' + escapeHtml(t.title || '-') + '</a>'
                 : escapeHtml(t.title || '-');
-            var labels = (t.labels || []).map(function(l) { return badge(escapeHtml(l)); }).join(' ');
+            var parsedLabels = typeof t.labels === 'string' ? JSON.parse(t.labels || '[]') : (t.labels || []);
+            var labels = parsedLabels.map(function(l) { return badge(escapeHtml(l)); }).join(' ');
+            var launchCell = teams.length > 0
+                ? '<div class="launch-cell">' +
+                    '<select class="launch-team-select" data-ticket="' + escapeHtml(t.id) + '">' +
+                        '<option value="">Team...</option>' + teamOpts +
+                    '</select>' +
+                    '<button class="btn-launch" data-ticket="' + escapeHtml(t.id) + '">Launch</button>' +
+                  '</div>'
+                : '-';
             return '<tr>' +
                 '<td>' + badge(escapeHtml(t.source || '-'), (t.source || '').toLowerCase()) + '</td>' +
-                '<td>' + escapeHtml(t.external_id || '-') + '</td>' +
                 '<td>' + titleCell + '</td>' +
                 '<td>' + badge(escapeHtml(t.status || '-'), (t.status || '').toLowerCase()) + '</td>' +
                 '<td>' + escapeHtml(t.assignee || '-') + '</td>' +
                 '<td>' + (t.priority != null ? priorityBadge(t.priority) : '-') + '</td>' +
                 '<td>' + (labels || '-') + '</td>' +
-                '<td>' + timeAgo(t.fetched_at) + '</td>' +
+                '<td>' + launchCell + '</td>' +
             '</tr>';
         }).join('');
         setContent(el.querySelector('.tickets-table-container'),
             '<div class="table-container">' +
-                '<table><thead><tr><th>Source</th><th>ID</th><th>Title</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Labels</th><th>Fetched</th></tr></thead>' +
-                '<tbody>' + (rows || '<tr><td colspan="8" class="empty">No tickets</td></tr>') + '</tbody></table>' +
+                '<table><thead><tr><th>Source</th><th>Title</th><th>Status</th><th>Assignee</th><th>Priority</th><th>Labels</th><th>Launch</th></tr></thead>' +
+                '<tbody>' + (rows || '<tr><td colspan="7" class="empty">No tickets</td></tr>') + '</tbody></table>' +
             '</div>');
+
+        // Launch button handlers
+        el.querySelectorAll('.btn-launch').forEach(function(btn) {
+            btn.addEventListener('click', async function() {
+                var ticketId = this.dataset.ticket;
+                var select = el.querySelector('.launch-team-select[data-ticket="' + ticketId + '"]');
+                var teamId = select.value;
+                if (!teamId) { alert('Select a team first'); return; }
+                this.disabled = true;
+                this.textContent = '...';
+                var resp = await fetch(API + '/api/launches', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticket_id: ticketId, team_id: teamId }),
+                });
+                var result = await resp.json();
+                if (result.ok) {
+                    this.textContent = 'Launched!';
+                    setTimeout(function() { renderTickets(url); }, 1000);
+                } else {
+                    alert('Error: ' + (result.error || 'Unknown error'));
+                    this.disabled = false;
+                    this.textContent = 'Launch';
+                }
+            });
+        });
     }
 
     setContent(el,
@@ -355,22 +472,58 @@ async function loadLaunches() {
             ? '<a href="' + escapeHtml(l.pr_url) + '" target="_blank" rel="noopener">PR</a>'
             : '-';
         var errTrunc = l.error ? l.error.substring(0, 60) + (l.error.length > 60 ? '...' : '') : '';
+        var statusSelect = '<select class="launch-status-select" data-id="' + escapeHtml(l.id) + '">' +
+            ['pending', 'running', 'done', 'failed'].map(function(s) {
+                return '<option value="' + s + '"' + (l.status === s ? ' selected' : '') + '>' + s + '</option>';
+            }).join('') + '</select>';
         return '<tr>' +
-            '<td>' + escapeHtml(l.ticket_title || '-') + '</td>' +
+            '<td>' + escapeHtml(l.ticket_title || l.ticket_id || '-') + '</td>' +
             '<td>' + escapeHtml(l.team_name || '-') + '</td>' +
-            '<td>' + escapeHtml(l.branch || '-') + '</td>' +
-            '<td>' + badge(escapeHtml(l.status || '-'), (l.status || '').toLowerCase()) + '</td>' +
+            '<td><code style="font-size:0.75rem">' + escapeHtml(l.branch || '-') + '</code></td>' +
+            '<td>' + statusSelect + '</td>' +
             '<td>' + prCell + '</td>' +
             '<td title="' + escapeHtml(l.error || '') + '">' + escapeHtml(errTrunc) + '</td>' +
             '<td>' + timeAgo(l.created_at) + '</td>' +
+            '<td><button class="btn-remove-member btn-delete-launch" data-id="' + escapeHtml(l.id) + '" title="Delete">&times;</button></td>' +
         '</tr>';
     }).join('');
     setContent(el,
         '<h2>Launches</h2>' +
         '<div class="table-container">' +
-            '<table><thead><tr><th>Ticket</th><th>Team</th><th>Branch</th><th>Status</th><th>PR</th><th>Error</th><th>Created</th></tr></thead>' +
-            '<tbody>' + (rows || '<tr><td colspan="7" class="empty">No launches</td></tr>') + '</tbody></table>' +
+            '<table><thead><tr><th>Ticket</th><th>Team</th><th>Branch</th><th>Status</th><th>PR</th><th>Error</th><th>Created</th><th></th></tr></thead>' +
+            '<tbody>' + (rows || '<tr><td colspan="8" class="empty">No launches</td></tr>') + '</tbody></table>' +
         '</div>');
+
+    // Status update handlers
+    el.querySelectorAll('.launch-status-select').forEach(function(select) {
+        select.addEventListener('change', async function() {
+            var id = this.dataset.id;
+            var resp = await fetch(API + '/api/launches/' + encodeURIComponent(id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: this.value }),
+            });
+            var result = await resp.json();
+            if (!result.ok) alert('Error: ' + (result.error || 'Unknown error'));
+        });
+    });
+
+    // Delete launch handlers
+    el.querySelectorAll('.btn-delete-launch').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+            if (!confirm('Delete this launch?')) return;
+            var id = this.dataset.id;
+            var resp = await fetch(API + '/api/launches/' + encodeURIComponent(id), {
+                method: 'DELETE',
+            });
+            var result = await resp.json();
+            if (result.ok) {
+                loadLaunches();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        });
+    });
 }
 
 async function loadMemory() {
@@ -490,7 +643,8 @@ function connectSSE() {
         setTimeout(connectSSE, 3000);
     };
     eventSource.onmessage = function() {
-        // Refresh current page on changes
+        // Skip refresh when a form is open to avoid destroying user input
+        if (document.querySelector('.create-form')) return;
         if (loaders[currentPage]) {
             loaders[currentPage]();
         }
@@ -499,6 +653,8 @@ function connectSSE() {
 
 // Auto-refresh every 10s as fallback
 setInterval(function() {
+    // Skip refresh when a form is open to avoid destroying user input
+    if (document.querySelector('.create-form')) return;
     if (loaders[currentPage]) loaders[currentPage]();
 }, 10000);
 

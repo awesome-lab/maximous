@@ -365,11 +365,35 @@ td.empty {
 .badge-haiku { background: rgba(102, 187, 106, 0.15); color: var(--success); }
 
 /* Team cards */
+.teams-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
 .team-card { min-height: 120px; }
+.team-card-header { display: flex; align-items: center; justify-content: space-between; }
 .team-card h3 { color: var(--accent); font-size: 0.9rem; text-transform: none; letter-spacing: normal; }
+.btn-delete-team { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1rem; padding: 0.1rem 0.4rem; border-radius: 4px; line-height: 1; }
+.btn-delete-team:hover { color: var(--error, #f44336); background: rgba(244, 67, 54, 0.1); }
 .team-members { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.75rem; }
-.team-member { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+.team-member { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; flex-wrap: wrap; }
+.team-member .btn-remove-member { margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: 4px; }
+.team-member .btn-remove-member:hover { color: var(--error, #f44336); background: rgba(244, 67, 54, 0.1); }
 .member-name { color: var(--text-primary); font-weight: 500; }
+.team-card-actions { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.add-member-row { display: flex; gap: 0.5rem; align-items: center; }
+.add-member-row select { flex: 1; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 0.35rem 0.5rem; font-size: 0.8rem; }
+.add-member-row button { background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 0.35rem 0.75rem; font-size: 0.8rem; cursor: pointer; white-space: nowrap; }
+.add-member-row button:hover { opacity: 0.85; }
+
+/* Launch controls */
+.launch-cell { display: flex; gap: 0.35rem; align-items: center; }
+.launch-cell select, .launch-team-select { background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 0.25rem 0.4rem; font-size: 0.75rem; }
+.btn-launch { background: var(--accent); color: #000; border: none; border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem; cursor: pointer; white-space: nowrap; font-weight: 600; }
+.btn-launch:hover { opacity: 0.85; }
+.btn-launch:disabled { opacity: 0.5; cursor: default; }
+.launch-status-select { background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 0.25rem 0.4rem; font-size: 0.75rem; }
 
 /* Filter tabs (shared with tickets) */
 .channel-tabs {
@@ -638,6 +662,10 @@ td.empty {
 
     .cards {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .teams-grid {
+        grid-template-columns: 1fr;
     }
 
     .memory-layout {
