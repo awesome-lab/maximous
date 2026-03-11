@@ -1,9 +1,10 @@
 pub mod memory;
-pub mod messages;
+pub mod definitions;
 pub mod tasks;
 pub mod agents;
 pub mod changes;
 pub mod sessions;
+pub mod teams;
 
 use rusqlite::Connection;
 use serde_json::Value;
@@ -34,9 +35,9 @@ pub fn dispatch_tool(name: &str, args: &Value, conn: &Connection) -> ToolResult 
         "memory_search" => memory::search(args, conn),
         "memory_search_index" => memory::search_index(args, conn),
         "memory_delete" => memory::delete(args, conn),
-        "message_send" => messages::send(args, conn),
-        "message_read" => messages::read(args, conn),
-        "message_ack" => messages::ack(args, conn),
+        "agent_define" => definitions::define(args, conn),
+        "agent_catalog" => definitions::catalog(args, conn),
+        "agent_remove" => definitions::remove(args, conn),
         "task_create" => tasks::create(args, conn),
         "task_update" => tasks::update(args, conn),
         "task_list" => tasks::list(args, conn),
@@ -47,6 +48,9 @@ pub fn dispatch_tool(name: &str, args: &Value, conn: &Connection) -> ToolResult 
         "session_start" => sessions::start(args, conn),
         "session_end" => sessions::end(args, conn),
         "session_list" => sessions::list(args, conn),
+        "team_create" => teams::create(args, conn),
+        "team_list" => teams::list(args, conn),
+        "team_delete" => teams::delete(args, conn),
         _ => ToolResult::fail(&format!("Unknown tool: {}", name)),
     }
 }
