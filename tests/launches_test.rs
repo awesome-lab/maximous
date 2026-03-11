@@ -380,6 +380,38 @@ fn test_launch_delete_not_found() {
 }
 
 #[test]
+fn test_launch_create_with_invalid_ticket_id() {
+    let conn = setup();
+    // Create team but no ticket — launch should fail due to FK constraint on ticket_id
+    seed_agent(&conn, "dev");
+    let team = tools::teams::create(&serde_json::json!({"name": "squad", "members": [{"agent_id": "dev", "role": "impl"}]}), &conn);
+    let team_id = team.data.unwrap()["team"]["id"].as_str().unwrap().to_string();
+
+    let result = tools::launches::create(
+        &serde_json::json!({"ticket_id": "nonexistent", "team_id": team_id, "branch": "feat/x"}),
+        &conn,
+    );
+    // SQLite enforces FK constraints when foreign_keys pragma is ON (set in init_db)
+    // The insert should fail because "nonexistent" is not in the tickets table
+    assert!(!result.ok, "expected FK violation, got: {:?}", result.data);
+}
+
+#[test]
+fn test_launch_create_with_invalid_team_id() {
+    let conn = setup();
+    // Create ticket but no team — launch should fail due to FK constraint on team_id
+    tools::tickets::cache(&serde_json::json!({"id": "t1", "source": "linear", "external_id": "L1", "title": "Test", "status": "todo"}), &conn);
+
+    let result = tools::launches::create(
+        &serde_json::json!({"ticket_id": "t1", "team_id": "nonexistent", "branch": "feat/x"}),
+        &conn,
+    );
+    // SQLite enforces FK constraints when foreign_keys pragma is ON (set in init_db)
+    // The insert should fail because "nonexistent" is not in the teams table
+    assert!(!result.ok, "expected FK violation, got: {:?}", result.data);
+}
+
+#[test]
 fn test_dispatch_launch_tools() {
     let conn = setup();
     seed_agent(&conn, "agent-1");

@@ -73,7 +73,15 @@ fn test_tool_list_contains_all_tools() {
     assert!(names.contains(&"launch_create"));
     assert!(names.contains(&"launch_update"));
     assert!(names.contains(&"launch_list"));
+    assert!(names.contains(&"launch_delete"));
 
-    // Total: 15 existing (minus 3 message tools) + 12 new = 27
-    assert_eq!(tools.len(), 27);
+    // Member management
+    assert!(names.contains(&"team_add_member"));
+    assert!(names.contains(&"team_remove_member"));
+
+    // Single ticket fetch
+    assert!(names.contains(&"ticket_get"));
+
+    // Total: 15 existing (minus 3 message) + 12 new + 4 extras = 31
+    assert_eq!(tools.len(), 31);
 }

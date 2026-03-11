@@ -352,3 +352,15 @@ fn test_ticket_list_priority_ordering() {
     assert_eq!(tickets[1]["priority"], 2);
     assert_eq!(tickets[2]["priority"], 3);
 }
+
+#[test]
+fn test_ticket_get_includes_assignee() {
+    let conn = setup();
+    tools::tickets::cache(&serde_json::json!({
+        "id": "t1", "source": "linear", "external_id": "L1",
+        "title": "Test", "status": "todo", "assignee": "alice"
+    }), &conn);
+    let result = tools::tickets::get(&serde_json::json!({"id": "t1"}), &conn);
+    assert!(result.ok, "expected ok, got: {:?}", result.error);
+    assert_eq!(result.data.unwrap()["ticket"]["assignee"], "alice");
+}

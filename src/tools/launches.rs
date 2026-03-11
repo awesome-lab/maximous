@@ -77,7 +77,7 @@ pub fn update(args: &Value, conn: &Connection) -> ToolResult {
     let params_ref: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
     match conn.execute(&sql, params_ref.as_slice()) {
-        Ok(updated) if updated == 0 => return ToolResult::fail(&format!("launch not found: {}", id)),
+        Ok(0) => return ToolResult::fail(&format!("launch not found: {}", id)),
         Ok(_) => {}
         Err(e) => return ToolResult::fail(&format!("db error: {}", e)),
     }
