@@ -198,13 +198,114 @@ async function loadTeams() {
 
     setContent(el,
         '<h2>Teams</h2>' +
-        '<h3 style="margin-bottom:1rem">Agent Definitions</h3>' +
+        '<div class="section-header"><h3>Agent Definitions</h3><button class="btn-create" id="btn-new-agent">+ New Agent</button></div>' +
+        '<div id="agent-form-container" class="form-container hidden"></div>' +
         '<div class="table-container" style="margin-bottom:2rem">' +
             '<table><thead><tr><th>ID</th><th>Name</th><th>Capabilities</th><th>Model</th><th>Prompt Hint</th></tr></thead>' +
             '<tbody>' + (defRows || '<tr><td colspan="5" class="empty">No agent definitions</td></tr>') + '</tbody></table>' +
         '</div>' +
-        '<h3 style="margin-bottom:1rem">Teams</h3>' +
+        '<div class="section-header"><h3>Teams</h3><button class="btn-create" id="btn-new-team">+ New Team</button></div>' +
+        '<div id="team-form-container" class="form-container hidden"></div>' +
         '<div class="cards">' + (teamCards || '<div class="empty">No teams</div>') + '</div>');
+
+    // New Agent form toggle
+    document.getElementById('btn-new-agent').addEventListener('click', function() {
+        var container = document.getElementById('agent-form-container');
+        if (!container.classList.contains('hidden')) {
+            container.classList.add('hidden');
+            return;
+        }
+        setContent(container,
+            '<form id="form-new-agent" class="create-form">' +
+                '<div class="form-row">' +
+                    '<label>ID <input type="text" name="id" placeholder="e.g. frontend-dev" required></label>' +
+                    '<label>Name <input type="text" name="name" placeholder="e.g. Frontend Developer" required></label>' +
+                '</div>' +
+                '<div class="form-row">' +
+                    '<label>Model <select name="model"><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option></select></label>' +
+                    '<label>Capabilities <input type="text" name="capabilities" placeholder="comma-separated, e.g. code,test,review"></label>' +
+                '</div>' +
+                '<div class="form-row">' +
+                    '<label class="full-width">Prompt Hint <textarea name="prompt_hint" rows="3" placeholder="System prompt guidance for this agent"></textarea></label>' +
+                '</div>' +
+                '<div class="form-actions">' +
+                    '<button type="submit" class="btn-submit">Create Agent</button>' +
+                    '<button type="button" class="btn-cancel" id="cancel-agent">Cancel</button>' +
+                '</div>' +
+            '</form>');
+        container.classList.remove('hidden');
+        document.getElementById('cancel-agent').addEventListener('click', function() {
+            container.classList.add('hidden');
+        });
+        document.getElementById('form-new-agent').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var f = e.target;
+            var caps = f.capabilities.value.trim();
+            var body = {
+                id: f.id.value.trim(),
+                name: f.name.value.trim(),
+                model: f.model.value,
+                capabilities: caps ? caps.split(',').map(function(s) { return s.trim(); }) : [],
+                prompt_hint: f.prompt_hint.value.trim(),
+            };
+            var resp = await fetch(API + '/api/agent-definitions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            var result = await resp.json();
+            if (result.ok) {
+                container.classList.add('hidden');
+                loadTeams();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        });
+    });
+
+    // New Team form toggle
+    document.getElementById('btn-new-team').addEventListener('click', function() {
+        var container = document.getElementById('team-form-container');
+        if (!container.classList.contains('hidden')) {
+            container.classList.add('hidden');
+            return;
+        }
+        setContent(container,
+            '<form id="form-new-team" class="create-form">' +
+                '<div class="form-row">' +
+                    '<label>Name <input type="text" name="name" placeholder="e.g. backend-team" required></label>' +
+                    '<label>Description <input type="text" name="description" placeholder="Optional description"></label>' +
+                '</div>' +
+                '<div class="form-actions">' +
+                    '<button type="submit" class="btn-submit">Create Team</button>' +
+                    '<button type="button" class="btn-cancel" id="cancel-team">Cancel</button>' +
+                '</div>' +
+            '</form>');
+        container.classList.remove('hidden');
+        document.getElementById('cancel-team').addEventListener('click', function() {
+            container.classList.add('hidden');
+        });
+        document.getElementById('form-new-team').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            var f = e.target;
+            var body = {
+                name: f.name.value.trim(),
+                description: f.description.value.trim(),
+            };
+            var resp = await fetch(API + '/api/teams', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            var result = await resp.json();
+            if (result.ok) {
+                container.classList.add('hidden');
+                loadTeams();
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        });
+    });
 }
 
 async function loadTickets() {
@@ -236,24 +337,13 @@ async function loadTickets() {
     }
 
     setContent(el,
-        '<h2>Tickets</h2>' +
-        '<div class="channel-tabs" style="margin-bottom:1.25rem">' +
-            '<button class="channel-tab active" data-source="">All</button>' +
-            '<button class="channel-tab" data-source="linear">Linear</button>' +
-            '<button class="channel-tab" data-source="jira">Jira</button>' +
-        '</div>' +
+        '<div class="section-header"><h2>Tickets</h2><button class="btn-create" id="btn-refresh-tickets">Refresh</button></div>' +
         '<div class="tickets-table-container"></div>');
 
     await renderTickets('/api/tickets');
 
-    el.querySelectorAll('.channel-tab').forEach(function(btn) {
-        btn.addEventListener('click', async function() {
-            el.querySelectorAll('.channel-tab').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            var src = btn.dataset.source;
-            var url = src ? '/api/tickets?source=' + encodeURIComponent(src) : '/api/tickets';
-            await renderTickets(url);
-        });
+    document.getElementById('btn-refresh-tickets').addEventListener('click', function() {
+        renderTickets('/api/tickets');
     });
 }
 

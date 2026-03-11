@@ -29,6 +29,8 @@ pub fn create_router(db: DbState) -> Router {
         .route("/api/teams", get(api::teams))
         .route("/api/teams/:name/members", post(api::add_team_member))
         .route("/api/teams/:name/members/:agent_id", delete(api::remove_team_member))
+        .route("/api/agent-definitions", post(api::create_agent_definition))
+        .route("/api/teams", post(api::create_team))
         .route("/api/tickets", get(api::tickets))
         .route("/api/launches", get(api::launches))
         .route("/api/memory", get(api::memory))

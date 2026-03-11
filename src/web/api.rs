@@ -459,6 +459,50 @@ pub async fn events_sse(
 }
 
 #[derive(Deserialize)]
+pub struct CreateAgentDefinitionBody {
+    pub id: String,
+    pub name: String,
+    pub capabilities: Option<Vec<String>>,
+    pub model: Option<String>,
+    pub prompt_hint: Option<String>,
+}
+
+pub async fn create_agent_definition(
+    State(db): State<DbState>,
+    Json(body): Json<CreateAgentDefinitionBody>,
+) -> Json<Value> {
+    let args = json!({
+        "id": body.id,
+        "name": body.name,
+        "capabilities": body.capabilities.unwrap_or_default(),
+        "model": body.model.unwrap_or_else(|| "sonnet".to_string()),
+        "prompt_hint": body.prompt_hint.unwrap_or_default(),
+    });
+    let conn = db.lock().unwrap();
+    let result = crate::tools::definitions::define(&args, &conn);
+    Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
+}
+
+#[derive(Deserialize)]
+pub struct CreateTeamBody {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+pub async fn create_team(
+    State(db): State<DbState>,
+    Json(body): Json<CreateTeamBody>,
+) -> Json<Value> {
+    let args = json!({
+        "name": body.name,
+        "description": body.description.unwrap_or_default(),
+    });
+    let conn = db.lock().unwrap();
+    let result = crate::tools::teams::create(&args, &conn);
+    Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
+}
+
+#[derive(Deserialize)]
 pub struct AddMemberBody {
     pub agent_id: String,
     pub role: Option<String>,
