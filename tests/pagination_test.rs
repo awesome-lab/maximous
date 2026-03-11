@@ -56,19 +56,19 @@ fn test_agent_list_pagination() {
 }
 
 #[test]
-fn test_message_read_pagination() {
+fn test_ticket_list_pagination() {
     let conn = setup();
     for i in 0..5 {
-        tools::messages::send(
-            &serde_json::json!({"channel": "test", "sender": "bot", "content": format!("msg {}", i)}),
+        tools::tickets::cache(
+            &serde_json::json!({"id": format!("t{}", i), "source": "linear", "external_id": format!("LIN-{}", i), "title": format!("Ticket {}", i), "status": "todo"}),
             &conn,
         );
     }
-    let result = tools::messages::read(
-        &serde_json::json!({"channel": "test", "limit": 2, "offset": 0}),
+    let result = tools::tickets::list(
+        &serde_json::json!({"limit": 2, "offset": 0}),
         &conn,
     );
     assert!(result.ok);
     let data = result.data.unwrap();
-    assert_eq!(data["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(data["tickets"].as_array().unwrap().len(), 2);
 }
