@@ -29,23 +29,51 @@ fn test_tool_list_contains_all_tools() {
     let tools = mcp::tool_definitions();
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
+    // Memory tools
     assert!(names.contains(&"memory_set"));
     assert!(names.contains(&"memory_get"));
     assert!(names.contains(&"memory_search"));
+    assert!(names.contains(&"memory_search_index"));
     assert!(names.contains(&"memory_delete"));
-    assert!(names.contains(&"message_send"));
-    assert!(names.contains(&"message_read"));
-    assert!(names.contains(&"message_ack"));
+
+    // Task tools
     assert!(names.contains(&"task_create"));
     assert!(names.contains(&"task_update"));
     assert!(names.contains(&"task_list"));
+
+    // Agent runtime tools
     assert!(names.contains(&"agent_register"));
     assert!(names.contains(&"agent_heartbeat"));
     assert!(names.contains(&"agent_list"));
-    assert!(names.contains(&"poll_changes"));
-    assert!(names.contains(&"memory_search_index"));
+
+    // Session tools
     assert!(names.contains(&"session_start"));
     assert!(names.contains(&"session_end"));
     assert!(names.contains(&"session_list"));
-    assert_eq!(tools.len(), 18);
+
+    // Poll changes
+    assert!(names.contains(&"poll_changes"));
+
+    // Agent definition tools
+    assert!(names.contains(&"agent_define"));
+    assert!(names.contains(&"agent_catalog"));
+    assert!(names.contains(&"agent_remove"));
+
+    // Team tools
+    assert!(names.contains(&"team_create"));
+    assert!(names.contains(&"team_list"));
+    assert!(names.contains(&"team_delete"));
+
+    // Ticket tools
+    assert!(names.contains(&"ticket_cache"));
+    assert!(names.contains(&"ticket_list"));
+    assert!(names.contains(&"ticket_clear"));
+
+    // Launch tools
+    assert!(names.contains(&"launch_create"));
+    assert!(names.contains(&"launch_update"));
+    assert!(names.contains(&"launch_list"));
+
+    // Total: 15 existing (minus 3 message tools) + 12 new = 27
+    assert_eq!(tools.len(), 27);
 }

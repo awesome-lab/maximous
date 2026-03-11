@@ -137,45 +137,6 @@ pub fn tool_definitions() -> Vec<ToolDef> {
             }),
         },
         ToolDef {
-            name: "message_send".into(),
-            description: "Send a message to a channel with priority".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "channel": {"type": "string", "description": "Target channel"},
-                    "sender": {"type": "string", "description": "Sender identifier"},
-                    "content": {"type": "string", "description": "Message content (JSON string)"},
-                    "priority": {"type": "integer", "description": "0=critical, 1=high, 2=normal, 3=low", "default": 2}
-                },
-                "required": ["channel", "sender", "content"]
-            }),
-        },
-        ToolDef {
-            name: "message_read".into(),
-            description: "Read messages from a channel, optionally only unacknowledged".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "channel": {"type": "string", "description": "Channel to read from"},
-                    "unacknowledged_only": {"type": "boolean", "description": "Only return unacknowledged messages", "default": false},
-                    "limit": {"type": "integer", "description": "Max messages to return", "default": 50},
-                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
-                },
-                "required": ["channel"]
-            }),
-        },
-        ToolDef {
-            name: "message_ack".into(),
-            description: "Acknowledge a message by ID".into(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "id": {"type": "integer", "description": "Message ID to acknowledge"}
-                },
-                "required": ["id"]
-            }),
-        },
-        ToolDef {
             name: "task_create".into(),
             description: "Create a new task with optional dependencies".into(),
             input_schema: serde_json::json!({
@@ -305,6 +266,198 @@ pub fn tool_definitions() -> Vec<ToolDef> {
                     "agent_id": {"type": "string", "description": "Filter by agent"},
                     "status": {"type": "string", "description": "Filter by status (active, ended)"},
                     "limit": {"type": "integer", "description": "Max results", "default": 50},
+                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
+                }
+            }),
+        },
+        // --- Agent Definitions ---
+        ToolDef {
+            name: "agent_define".into(),
+            description: "Create or update a reusable agent definition with capabilities and model".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Agent definition ID"},
+                    "name": {"type": "string", "description": "Agent display name"},
+                    "capabilities": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of agent capabilities"
+                    },
+                    "model": {
+                        "type": "string",
+                        "enum": ["sonnet", "opus", "haiku"],
+                        "default": "sonnet",
+                        "description": "Model to use for this agent"
+                    },
+                    "prompt_hint": {"type": "string", "description": "Optional system prompt hint for the agent"}
+                },
+                "required": ["id", "name"]
+            }),
+        },
+        ToolDef {
+            name: "agent_catalog".into(),
+            description: "List all agent definitions in the registry".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max results to return", "default": 100},
+                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
+                }
+            }),
+        },
+        ToolDef {
+            name: "agent_remove".into(),
+            description: "Remove an agent definition from the registry".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Agent definition ID to remove"}
+                },
+                "required": ["id"]
+            }),
+        },
+        // --- Teams ---
+        ToolDef {
+            name: "team_create".into(),
+            description: "Create a team and optionally assign agent members with roles".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Team name"},
+                    "description": {"type": "string", "description": "Optional team description"},
+                    "members": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "agent_id": {"type": "string"},
+                                "role": {"type": "string"}
+                            },
+                            "required": ["agent_id", "role"]
+                        },
+                        "description": "Optional list of agent members with roles"
+                    }
+                },
+                "required": ["name"]
+            }),
+        },
+        ToolDef {
+            name: "team_list".into(),
+            description: "List all teams with their members and agent definitions".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max results to return", "default": 100},
+                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
+                }
+            }),
+        },
+        ToolDef {
+            name: "team_delete".into(),
+            description: "Delete a team by name".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Team name to delete"}
+                },
+                "required": ["name"]
+            }),
+        },
+        // --- Tickets ---
+        ToolDef {
+            name: "ticket_cache".into(),
+            description: "Cache a ticket fetched from Linear or Jira for dashboard display".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Internal ticket identifier"},
+                    "source": {
+                        "type": "string",
+                        "enum": ["linear", "jira"],
+                        "description": "Ticket source system"
+                    },
+                    "external_id": {"type": "string", "description": "ID in the source system"},
+                    "title": {"type": "string", "description": "Ticket title"},
+                    "status": {"type": "string", "description": "Ticket status"},
+                    "url": {"type": "string", "description": "URL to the ticket in source system"},
+                    "description": {"type": "string", "description": "Ticket description"},
+                    "priority": {"type": "integer", "description": "Ticket priority"},
+                    "labels": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Ticket labels"
+                    },
+                    "metadata": {"type": "object", "description": "Additional metadata"}
+                },
+                "required": ["id", "source", "external_id", "title", "status"]
+            }),
+        },
+        ToolDef {
+            name: "ticket_list".into(),
+            description: "List cached tickets with optional source and status filters".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "description": "Filter by source (linear, jira)"},
+                    "status": {"type": "string", "description": "Filter by status"},
+                    "limit": {"type": "integer", "description": "Max results to return", "default": 100},
+                    "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
+                }
+            }),
+        },
+        ToolDef {
+            name: "ticket_clear".into(),
+            description: "Clear cached tickets, optionally filtered by source".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "description": "Optional source filter (linear, jira)"}
+                }
+            }),
+        },
+        // --- Launches ---
+        ToolDef {
+            name: "launch_create".into(),
+            description: "Create a launch record for deploying a team to work on a ticket in a worktree".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "ticket_id": {"type": "string", "description": "ID of the ticket to work on"},
+                    "team_id": {"type": "string", "description": "ID of the team to deploy"},
+                    "branch": {"type": "string", "description": "Git branch for the worktree"},
+                    "worktree_path": {"type": "string", "description": "Optional path to the worktree"}
+                },
+                "required": ["ticket_id", "team_id", "branch"]
+            }),
+        },
+        ToolDef {
+            name: "launch_update".into(),
+            description: "Update a launch status, PR URL, error, or worktree path".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Launch ID to update"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "running", "completed", "pr_created", "failed"],
+                        "description": "New status for the launch"
+                    },
+                    "pr_url": {"type": "string", "description": "URL of the created pull request"},
+                    "error": {"type": "string", "description": "Error message if launch failed"},
+                    "worktree_path": {"type": "string", "description": "Path to the worktree"}
+                },
+                "required": ["id"]
+            }),
+        },
+        ToolDef {
+            name: "launch_list".into(),
+            description: "List launches with optional status filter, includes ticket and team info".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "description": "Filter by status"},
+                    "limit": {"type": "integer", "description": "Max results to return", "default": 100},
                     "offset": {"type": "integer", "description": "Offset for pagination", "default": 0}
                 }
             }),
