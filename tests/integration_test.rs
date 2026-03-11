@@ -62,16 +62,15 @@ fn test_full_multi_agent_workflow() {
     let mem = tools::memory::get(&serde_json::json!({"namespace": "task-results", "key": parse_id}), &conn);
     assert!(mem.data.unwrap()["value"].as_str().unwrap().contains("/users"));
 
-    // 9. Agents communicate
-    tools::messages::send(&serde_json::json!({
-        "channel": "team",
-        "sender": "builder",
-        "content": "{\"question\":\"REST or GraphQL?\"}",
-        "priority": 1
+    // 9. Agents communicate via shared memory
+    tools::memory::set(&serde_json::json!({
+        "namespace": "team",
+        "key": "builder-question",
+        "value": "{\"question\":\"REST or GraphQL?\"}"
     }), &conn);
 
-    let msgs = tools::messages::read(&serde_json::json!({"channel": "team", "unacknowledged_only": true}), &conn);
-    assert_eq!(msgs.data.unwrap()["count"], 1);
+    let mem = tools::memory::get(&serde_json::json!({"namespace": "team", "key": "builder-question"}), &conn);
+    assert!(mem.data.unwrap()["value"].as_str().unwrap().contains("REST or GraphQL"));
 
     // 10. Verify agent list
     let agents = tools::agents::list(&serde_json::json!({}), &conn);

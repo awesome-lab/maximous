@@ -21,7 +21,7 @@ fn test_poll_changes_empty() {
 fn test_poll_changes_after_operations() {
     let conn = setup();
     tools::memory::set(&serde_json::json!({"namespace": "ns", "key": "k", "value": "v"}), &conn);
-    tools::messages::send(&serde_json::json!({"channel": "ch", "sender": "a", "content": "hi"}), &conn);
+    tools::tasks::create(&serde_json::json!({"title": "test task"}), &conn);
     let result = tools::changes::poll(&serde_json::json!({"since_id": 0}), &conn);
     let data = result.data.unwrap();
     let changes = data["changes"].as_array().unwrap();
@@ -48,11 +48,11 @@ fn test_poll_changes_since_id() {
 fn test_poll_changes_filter_by_table() {
     let conn = setup();
     tools::memory::set(&serde_json::json!({"namespace": "ns", "key": "k", "value": "v"}), &conn);
-    tools::messages::send(&serde_json::json!({"channel": "ch", "sender": "a", "content": "hi"}), &conn);
-    let result = tools::changes::poll(&serde_json::json!({"table_name": "messages"}), &conn);
+    tools::tasks::create(&serde_json::json!({"title": "test task"}), &conn);
+    let result = tools::changes::poll(&serde_json::json!({"table_name": "tasks"}), &conn);
     let data = result.data.unwrap();
     let changes = data["changes"].as_array().unwrap();
-    assert!(changes.iter().all(|c| c["table_name"] == "messages"));
+    assert!(changes.iter().all(|c| c["table_name"] == "tasks"));
 }
 
 #[test]

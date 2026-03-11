@@ -30,6 +30,71 @@ fn migrate(conn: &Connection) -> Result<()> {
              ALTER TABLE memory ADD COLUMN category TEXT;",
         )?;
     }
+
+    let has_agent_definitions: bool = conn
+        .prepare("SELECT id FROM agent_definitions LIMIT 0")
+        .is_ok();
+    if !has_agent_definitions {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS agent_definitions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                capabilities TEXT NOT NULL DEFAULT '[]',
+                model TEXT NOT NULL DEFAULT 'sonnet',
+                prompt_hint TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            );
+            CREATE TABLE IF NOT EXISTS teams (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            );
+            CREATE TABLE IF NOT EXISTS team_members (
+                team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+                agent_id TEXT NOT NULL REFERENCES agent_definitions(id) ON DELETE CASCADE,
+                role TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (team_id, agent_id)
+            );
+            CREATE TABLE IF NOT EXISTS tickets (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL,
+                priority INTEGER NOT NULL DEFAULT 2,
+                url TEXT NOT NULL DEFAULT '',
+                labels TEXT NOT NULL DEFAULT '[]',
+                metadata TEXT NOT NULL DEFAULT '{}',
+                fetched_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                UNIQUE(source, external_id)
+            );
+            CREATE TABLE IF NOT EXISTS launches (
+                id TEXT PRIMARY KEY,
+                ticket_id TEXT NOT NULL REFERENCES tickets(id),
+                team_id TEXT NOT NULL REFERENCES teams(id),
+                branch TEXT NOT NULL,
+                worktree_path TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                pr_url TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_agent_definitions_name ON agent_definitions(name);
+            CREATE INDEX IF NOT EXISTS idx_teams_name ON teams(name);
+            CREATE INDEX IF NOT EXISTS idx_team_members_agent ON team_members(agent_id);
+            CREATE INDEX IF NOT EXISTS idx_tickets_source ON tickets(source, status);
+            CREATE INDEX IF NOT EXISTS idx_launches_status ON launches(status);
+            CREATE INDEX IF NOT EXISTS idx_launches_ticket ON launches(ticket_id);",
+        )?;
+    }
+
     Ok(())
 }
 

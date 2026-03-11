@@ -11,17 +11,6 @@ CREATE TABLE IF NOT EXISTS memory (
     PRIMARY KEY (namespace, key)
 );
 
--- Inter-agent messages
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel TEXT NOT NULL,
-    sender TEXT NOT NULL,
-    priority INTEGER NOT NULL DEFAULT 2,
-    content TEXT NOT NULL,
-    acknowledged INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL
-);
-
 -- Task coordination
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
@@ -61,14 +50,78 @@ CREATE TABLE IF NOT EXISTS config (
     value TEXT NOT NULL
 );
 
+-- Agent definitions (reusable agent configs)
+CREATE TABLE IF NOT EXISTS agent_definitions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    capabilities TEXT NOT NULL DEFAULT '[]',
+    model TEXT NOT NULL DEFAULT 'sonnet',
+    prompt_hint TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
+-- Teams
+CREATE TABLE IF NOT EXISTS teams (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
+-- Team members (many-to-many with role)
+CREATE TABLE IF NOT EXISTS team_members (
+    team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL REFERENCES agent_definitions(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (team_id, agent_id)
+);
+
+-- Cached tickets from Linear/Jira
+CREATE TABLE IF NOT EXISTS tickets (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 2,
+    url TEXT NOT NULL DEFAULT '',
+    labels TEXT NOT NULL DEFAULT '[]',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    fetched_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    UNIQUE(source, external_id)
+);
+
+-- Ticket launches (worktree deployments)
+CREATE TABLE IF NOT EXISTS launches (
+    id TEXT PRIMARY KEY,
+    ticket_id TEXT NOT NULL REFERENCES tickets(id),
+    team_id TEXT NOT NULL REFERENCES teams(id),
+    branch TEXT NOT NULL,
+    worktree_path TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    pr_url TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel, created_at);
-CREATE INDEX IF NOT EXISTS idx_messages_unacked ON messages(channel, acknowledged) WHERE acknowledged = 0;
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status, priority DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to) WHERE assigned_to IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_agents_heartbeat ON agents(last_heartbeat);
 CREATE INDEX IF NOT EXISTS idx_changes_id ON changes(id);
 CREATE INDEX IF NOT EXISTS idx_memory_namespace ON memory(namespace);
+CREATE INDEX IF NOT EXISTS idx_agent_definitions_name ON agent_definitions(name);
+CREATE INDEX IF NOT EXISTS idx_teams_name ON teams(name);
+CREATE INDEX IF NOT EXISTS idx_team_members_agent ON team_members(agent_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_source ON tickets(source, status);
+CREATE INDEX IF NOT EXISTS idx_launches_status ON launches(status);
+CREATE INDEX IF NOT EXISTS idx_launches_ticket ON launches(ticket_id);
 
 -- Triggers: auto-populate changes table
 
@@ -93,30 +146,6 @@ BEGIN
     INSERT INTO changes (table_name, row_id, action, summary, created_at)
     VALUES ('memory', OLD.namespace || ':' || OLD.key, 'delete',
             json_object('namespace', OLD.namespace, 'key', OLD.key),
-            strftime('%s', 'now'));
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_messages_insert AFTER INSERT ON messages
-BEGIN
-    INSERT INTO changes (table_name, row_id, action, summary, created_at)
-    VALUES ('messages', CAST(NEW.id AS TEXT), 'insert',
-            json_object('channel', NEW.channel, 'sender', NEW.sender, 'priority', NEW.priority),
-            strftime('%s', 'now'));
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_messages_update AFTER UPDATE ON messages
-BEGIN
-    INSERT INTO changes (table_name, row_id, action, summary, created_at)
-    VALUES ('messages', CAST(NEW.id AS TEXT), 'update',
-            json_object('channel', NEW.channel, 'acknowledged', NEW.acknowledged),
-            strftime('%s', 'now'));
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_messages_delete AFTER DELETE ON messages
-BEGIN
-    INSERT INTO changes (table_name, row_id, action, summary, created_at)
-    VALUES ('messages', CAST(OLD.id AS TEXT), 'delete',
-            json_object('channel', OLD.channel, 'sender', OLD.sender),
             strftime('%s', 'now'));
 END;
 
@@ -165,6 +194,118 @@ BEGIN
     INSERT INTO changes (table_name, row_id, action, summary, created_at)
     VALUES ('agents', OLD.id, 'delete',
             json_object('name', OLD.name),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_agent_definitions_insert AFTER INSERT ON agent_definitions
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('agent_definitions', NEW.id, 'insert',
+            json_object('name', NEW.name, 'model', NEW.model),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_agent_definitions_update AFTER UPDATE ON agent_definitions
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('agent_definitions', NEW.id, 'update',
+            json_object('name', NEW.name, 'model', NEW.model),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_agent_definitions_delete AFTER DELETE ON agent_definitions
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('agent_definitions', OLD.id, 'delete',
+            json_object('name', OLD.name),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_teams_insert AFTER INSERT ON teams
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('teams', NEW.id, 'insert',
+            json_object('name', NEW.name),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_teams_update AFTER UPDATE ON teams
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('teams', NEW.id, 'update',
+            json_object('name', NEW.name, 'description', NEW.description),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_teams_delete AFTER DELETE ON teams
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('teams', OLD.id, 'delete',
+            json_object('name', OLD.name),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_team_members_insert AFTER INSERT ON team_members
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('team_members', NEW.team_id || ':' || NEW.agent_id, 'insert',
+            json_object('team_id', NEW.team_id, 'agent_id', NEW.agent_id, 'role', NEW.role),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_team_members_delete AFTER DELETE ON team_members
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('team_members', OLD.team_id || ':' || OLD.agent_id, 'delete',
+            json_object('team_id', OLD.team_id, 'agent_id', OLD.agent_id),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_tickets_insert AFTER INSERT ON tickets
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('tickets', NEW.id, 'insert',
+            json_object('title', NEW.title, 'status', NEW.status, 'source', NEW.source),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_tickets_update AFTER UPDATE ON tickets
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('tickets', NEW.id, 'update',
+            json_object('title', NEW.title, 'status', NEW.status),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_tickets_delete AFTER DELETE ON tickets
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('tickets', OLD.id, 'delete',
+            json_object('title', OLD.title, 'source', OLD.source),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_launches_insert AFTER INSERT ON launches
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('launches', NEW.id, 'insert',
+            json_object('ticket_id', NEW.ticket_id, 'team_id', NEW.team_id, 'status', NEW.status),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_launches_update AFTER UPDATE ON launches
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('launches', NEW.id, 'update',
+            json_object('ticket_id', NEW.ticket_id, 'status', NEW.status, 'pr_url', NEW.pr_url),
+            strftime('%s', 'now'));
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_launches_delete AFTER DELETE ON launches
+BEGIN
+    INSERT INTO changes (table_name, row_id, action, summary, created_at)
+    VALUES ('launches', OLD.id, 'delete',
+            json_object('ticket_id', OLD.ticket_id, 'status', OLD.status),
             strftime('%s', 'now'));
 END;
 

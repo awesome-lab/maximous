@@ -16,11 +16,15 @@ fn test_init_db_creates_all_tables() {
         .collect();
 
     assert!(tables.contains(&"memory".to_string()));
-    assert!(tables.contains(&"messages".to_string()));
     assert!(tables.contains(&"tasks".to_string()));
     assert!(tables.contains(&"agents".to_string()));
     assert!(tables.contains(&"changes".to_string()));
     assert!(tables.contains(&"config".to_string()));
+    assert!(tables.contains(&"agent_definitions".to_string()));
+    assert!(tables.contains(&"teams".to_string()));
+    assert!(tables.contains(&"team_members".to_string()));
+    assert!(tables.contains(&"tickets".to_string()));
+    assert!(tables.contains(&"launches".to_string()));
 }
 
 #[test]
