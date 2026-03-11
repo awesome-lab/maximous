@@ -30,7 +30,7 @@ Agents with `last_heartbeat` older than 60 seconds are considered stale. Their a
 
 Read and acknowledge processed messages to keep channels clean:
 ```
-message_read(channel="team", unacknowledged_only=true)
+message_read(channel="orchestration", unacknowledged_only=true)
 message_ack(id=1)
 message_ack(id=2)
 ```

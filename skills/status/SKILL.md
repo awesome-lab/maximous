@@ -20,7 +20,7 @@ Run these three calls to get a full picture:
 - Running tasks only: `task_list(status="running")`
 - Blocked tasks: `task_list(status="pending")` — these are waiting for dependencies
 - Agent's workload: `task_list(assigned_to="agent-id")`
-- Unread messages: `message_read(channel="team", unacknowledged_only=true)`
+- Unread messages: `message_read(channel="orchestration", unacknowledged_only=true)`
 
 ## Presenting Status
 
