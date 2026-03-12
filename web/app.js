@@ -426,7 +426,7 @@ async function loadTickets() {
                 '<tbody>' + (rows || '<tr><td colspan="7" class="empty">No tickets</td></tr>') + '</tbody></table>' +
             '</div>');
 
-        // Launch button handlers
+        // Launch button handlers — just creates a pending launch, Claude Code picks it up
         el.querySelectorAll('.btn-launch').forEach(function(btn) {
             btn.addEventListener('click', async function() {
                 var ticketId = this.dataset.ticket;
@@ -434,8 +434,7 @@ async function loadTickets() {
                 var teamId = select.value;
                 if (!teamId) { alert('Select a team first'); return; }
                 this.disabled = true;
-                this.textContent = 'Launching...';
-                // Step 1: Create the launch
+                this.textContent = 'Queuing...';
                 var resp = await fetch(API + '/api/launches', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -448,23 +447,8 @@ async function loadTickets() {
                     this.textContent = 'Launch';
                     return;
                 }
-                // Step 2: Execute — launches Claude Code in background
-                var launchId = result.data && result.data.launch && result.data.launch.id;
-                if (launchId) {
-                    var execResp = await fetch(API + '/api/launches/' + encodeURIComponent(launchId) + '/execute', {
-                        method: 'POST',
-                    });
-                    var execResult = await execResp.json();
-                    if (execResult.ok) {
-                        this.textContent = 'Running';
-                        this.classList.add('btn-running');
-                    } else {
-                        this.textContent = 'Launched';
-                        console.error('Execute error:', execResult.error);
-                    }
-                } else {
-                    this.textContent = 'Launched';
-                }
+                this.textContent = 'Pending';
+                this.classList.add('btn-pending');
                 setTimeout(function() { renderTickets(url); }, 2000);
             });
         });

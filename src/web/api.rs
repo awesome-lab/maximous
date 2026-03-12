@@ -108,7 +108,7 @@ pub async fn tasks(State(db): State<DbState>, Query(params): Query<PaginationPar
     let offset = params.offset.unwrap_or(0);
     let mut stmt = conn.prepare(
         "SELECT id, title, status, priority, assigned_to, dependencies, result, created_at, updated_at
-         FROM tasks ORDER BY priority ASC, created_at ASC LIMIT ?1 OFFSET ?2"
+         FROM tasks ORDER BY created_at DESC LIMIT ?1 OFFSET ?2"
     ).unwrap();
     let tasks: Vec<Value> = stmt.query_map(rusqlite::params![limit, offset], |row| {
         Ok(json!({
@@ -598,6 +598,9 @@ pub async fn delete_launch(
     Json(json!({"ok": result.ok, "data": result.data, "error": result.error}))
 }
 
+/// Returns full launch context (prompt, members, ticket info) for a pending launch.
+/// The Claude Code session polling for pending launches calls this to get what it needs
+/// to dispatch an Agent with worktree isolation.
 pub async fn execute_launch(
     State(db): State<DbState>,
     Path(id): Path<String>,
@@ -606,7 +609,8 @@ pub async fn execute_launch(
 
     // Fetch launch + ticket + team details
     let launch_info = conn.query_row(
-        "SELECT l.id, l.ticket_id, l.team_id, l.branch, t.title, t.url, t.source, t.status,
+        "SELECT l.id, l.ticket_id, l.team_id, l.branch, l.status,
+                t.title, t.url, t.source, t.status,
                 tm.name AS team_name
          FROM launches l
          LEFT JOIN tickets t ON l.ticket_id = t.id
@@ -619,11 +623,12 @@ pub async fn execute_launch(
                 "ticket_id": row.get::<_, Option<String>>(1)?,
                 "team_id": row.get::<_, Option<String>>(2)?,
                 "branch": row.get::<_, Option<String>>(3)?,
-                "ticket_title": row.get::<_, Option<String>>(4)?,
-                "ticket_url": row.get::<_, Option<String>>(5)?,
-                "ticket_source": row.get::<_, Option<String>>(6)?,
-                "ticket_status": row.get::<_, Option<String>>(7)?,
-                "team_name": row.get::<_, Option<String>>(8)?,
+                "launch_status": row.get::<_, Option<String>>(4)?,
+                "ticket_title": row.get::<_, Option<String>>(5)?,
+                "ticket_url": row.get::<_, Option<String>>(6)?,
+                "ticket_source": row.get::<_, Option<String>>(7)?,
+                "ticket_status": row.get::<_, Option<String>>(8)?,
+                "team_name": row.get::<_, Option<String>>(9)?,
             }))
         },
     );
@@ -635,7 +640,7 @@ pub async fn execute_launch(
 
     // Get team members
     let team_id = info["team_id"].as_str().unwrap_or("");
-    let members: Vec<(String, String, String)> = if !team_id.is_empty() {
+    let members: Vec<Value> = if !team_id.is_empty() {
         let mut stmt = conn.prepare(
             "SELECT tm.agent_id, ad.name, ad.model
              FROM team_members tm
@@ -643,102 +648,25 @@ pub async fn execute_launch(
              WHERE tm.team_id = ?1"
         ).unwrap();
         stmt.query_map(rusqlite::params![team_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-            ))
+            Ok(json!({
+                "id": row.get::<_, String>(0)?,
+                "name": row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                "model": row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+            }))
         }).unwrap().filter_map(|r| r.ok()).collect()
     } else {
         Vec::new()
     };
 
-    // Update launch status to running
+    // Mark as running
     let _ = conn.execute(
         "UPDATE launches SET status = 'running', updated_at = strftime('%s', 'now') WHERE id = ?1",
         rusqlite::params![id],
     );
 
-    drop(conn); // Release the lock before spawning
-
-    // Build the prompt
-    let ticket_title = info["ticket_title"].as_str().unwrap_or("Unknown ticket");
-    let ticket_url = info["ticket_url"].as_str().unwrap_or("");
-    let team_name = info["team_name"].as_str().unwrap_or("Unknown team");
-    let branch = info["branch"].as_str().unwrap_or("");
-    let launch_id = info["id"].as_str().unwrap_or(&id);
-
-    let members_desc = if members.is_empty() {
-        String::new()
-    } else {
-        let list: Vec<String> = members.iter().map(|(id, name, model)| {
-            format!("- {} ({}, model: {})", name, id, model)
-        }).collect();
-        format!("\nTeam members:\n{}", list.join("\n"))
-    };
-
-    let ticket_ref = if ticket_url.is_empty() {
-        ticket_title.to_string()
-    } else {
-        format!("{}\nURL: {}", ticket_title, ticket_url)
-    };
-
-    let prompt = format!(
-        "You are an orchestrator for team \"{}\" working on a launch.\n\
-         {}\n\
-         Ticket: {}\n\
-         Branch: {}\n\
-         Launch ID: {}\n\n\
-         INSTRUCTIONS:\n\
-         1. Use /maximous:orchestrate to coordinate this work\n\
-         2. Start a maximous session (session_start) for this launch\n\
-         3. Break down the ticket into tasks (task_create) and assign them to team members\n\
-         4. Use the Agent tool to dispatch sub-agents for each team member's tasks\n\
-         5. Each sub-agent should use maximous tools (agent_heartbeat, task_update) to report progress\n\
-         6. When all tasks are done, update the launch status to 'done' (launch_update)\n\
-         7. Create a PR if code changes were made\n\n\
-         The maximous dashboard is watching — all activities, tasks, and agent statuses will be visible in real-time.\n\
-         Start by understanding the ticket, then plan and execute.",
-        team_name, members_desc, ticket_ref, branch, launch_id
-    );
-
-    // Write prompt to a temp file to avoid shell escaping issues
-    let prompt_file = format!("/tmp/maximous-launch-{}.txt", id);
-    if let Err(e) = std::fs::write(&prompt_file, &prompt) {
-        return Json(json!({"ok": false, "error": format!("failed to write prompt file: {}", e)}));
-    }
-
-    // Get the current working directory (project root)
-    let cwd = std::env::current_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| ".".to_string());
-
-    let escaped_branch = branch.replace('\'', "'\\''");
-
-    // Build the shell command: checkout branch, then run claude with the prompt
-    let shell_cmd = format!(
-        "cd '{cwd}' && git checkout -b '{branch}' 2>/dev/null; git checkout '{branch}' 2>/dev/null; claude < '{prompt_file}'",
-        cwd = cwd,
-        branch = escaped_branch,
-        prompt_file = prompt_file,
-    );
-
-    // Run in background directly (no new terminal needed)
-    let log_file = format!("/tmp/maximous-launch-{}.log", id);
-    let result = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(&shell_cmd)
-        .stdout(std::fs::File::create(&log_file).unwrap_or_else(|_| {
-            std::fs::File::create("/dev/null").unwrap()
-        }))
-        .stderr(std::fs::File::create(format!("{}.err", &log_file)).unwrap_or_else(|_| {
-            std::fs::File::create("/dev/null").unwrap()
-        }))
-        .stdin(std::process::Stdio::null())
-        .spawn();
-
-    match result {
-        Ok(child) => Json(json!({"ok": true, "message": "Claude Code launched in background", "pid": child.id()})),
-        Err(e) => Json(json!({"ok": false, "error": format!("failed to spawn process: {}", e)})),
-    }
+    Json(json!({
+        "ok": true,
+        "launch": info,
+        "members": members,
+    }))
 }
