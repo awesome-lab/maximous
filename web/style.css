@@ -394,7 +394,7 @@ td.empty {
 .btn-launch:hover { opacity: 0.85; }
 .btn-launch:disabled { opacity: 0.5; cursor: default; }
 .btn-launch.btn-running { background: var(--success); color: #000; }
-.launch-status-select { background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; padding: 0.25rem 0.4rem; font-size: 0.75rem; }
+
 
 /* Filter tabs (shared with tickets) */
 .channel-tabs {
